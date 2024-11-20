@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
+/>
+<link rel="stylesheet" href="../static/style/basic.css" />
+<link rel="stylesheet" href="../static/style/codeEditor.css" />
+<link rel="stylesheet" href="../static/style/form.css" />
+<html lang="en">
+  <script src="https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+
+  <head>
+    <meta charset="utf-8" />
+    <title>Select a Programming Language</title>
+  </head>
+
+  <body>
+    <!-- Header bar -->
+    <div id="title">
+      <h1>CharlaBots</h1>
+    </div>
+
+    <!-- <div class="bar">
+      <div class="left">
+        <button class="btn">
+          <a href="/"><i class="fa fa-home"></i> Home</a>
+        </button>
+      </div>
+    </div> -->
+
+    <!-- code save button at bottom -->
+    <!-- <button id="saveBtn" type="submit" onclick = "saveBot()"><i class="fa fa-floppy-o"></i> Save Bot</button>  -->
+    <br />
+    <!-- <script
+      type="text/javascript"
+      src="{{ url_for('static', filename='js/jquery.min.js') }}"
+    ></script> -->
+    <div id="reactEntry"></div>
+    <script
+      type="text/javascript"
+      src="{{ url_for('static', filename='js/selector.js') }}"
+    ></script>
+    <style>
+      body {
+        background-color: #b1c8e9;
+      }
+
+      #title {
+        text-align: center;
+        font-family: Tahoma, sans-serif;
+        font-size: 40px;
+        padding-top: 2.2%;
+      }
+
+      .btn-div {
+        padding: 10px;
+      }
+
+      h1 {
+        font-family: Tahoma, sans-serif;
+      }
+
+      .btn {
+        width: 45%;
+        height: 60px;
+        font-size: 20px;
+        background-color: rgb(223, 246, 255);
+        padding: 20px;
+        border-radius: 4px;
+      }
+      .btn:hover {
+        background-color: rgb(196, 186, 215);
+        cursor: pointer;
+      }
+    </style>
+  </body>
+</html>

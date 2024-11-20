@@ -2,29 +2,28 @@ const path = require('path');
 
 module.exports = {
   mode: 'development',
-  entry: './newCharlaBots/js/main.jsx',
+  entry: {
+    main: './newCharlaBots/js/main.jsx', // Main entry
+    languageSelector: './newCharlaBots/js/languageSelectorEntry.jsx', // New entry for the language selector
+    selector: './newCharlaBots/js/selectorEntry.jsx',
+  },
   output: {
     path: path.join(__dirname, '/newCharlaBots/static/js/'),
-    filename: 'bundle.js',
+    filename: '[name].js', // Dynamically name files based on entry names
   },
   module: {
     rules: [
       {
-        // Test for js or jsx files
         test: /\.jsx?$/,
-        // Exclude external modules from loader tests
         exclude: /node_modules/,
-        loader: 'babel-loader',
-        options: {
-          presets: ['@babel/preset-env', '@babel/preset-react'],
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env', '@babel/preset-react'],
+          },
         },
-        //loaders: [{test: /\.js$/, exclude: /node_modules/, loaders: ['babel']},{test: /\.css$/, loaders: ['style', 'css']}]
-
-
       },
     ],
-
-
   },
   resolve: {
     extensions: ['.js', '.jsx'],

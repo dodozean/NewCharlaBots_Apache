@@ -10,6 +10,21 @@ def show_index():
 
     return flask.render_template("index.html", **context)
 
+@newCharlaBots.app.route('/menu/')
+def show_menu():
+    """Display / route."""
+
+    context = {}
+
+    return flask.render_template("menu.html", **context)
+
+@newCharlaBots.app.route('/languageSelect/')
+def show_selector():
+    """Display / route."""
+
+    context = {}
+
+    return flask.render_template("selector.html", **context)
 
 @newCharlaBots.app.route('/editor/')
 def show_editor():
