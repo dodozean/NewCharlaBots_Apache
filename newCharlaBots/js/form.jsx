@@ -10,11 +10,11 @@ class Form extends React.Component {
     super(props);
     this.state = {
       options: [
-        // {text :'Chat with a Bot', key: 'button0'},
-        // {text :'Create a Bot', key: 'button1'},
-        // {text :'Edit a Bot', key: 'button2'},
-        // {text :'Chat with Two Bots', key: 'button3'},
-        // {text :'Create a Bot Language', key: 'button4'},
+        { text: "Chat with a Bot", key: "button0" },
+        { text: "Create a Bot", key: "button1" },
+        { text: "Edit a Bot", key: "button2" },
+        { text: "Chat with Two Bots", key: "button3" },
+        { text: "Create a Bot Language", key: "button4" },
       ],
 
       action: "",
@@ -255,13 +255,13 @@ class Form extends React.Component {
               ):(null)
             } */}
 
-            {this.state.action == "createBot" ||
+            {/* {this.state.action == "createBot" ||
             this.state.action == "editBot" ? (
               <div>
                 Select a Language: <br></br>
                 {allOptions}
               </div>
-            ) : null}
+            ) : null} */}
           </div>
 
           <br></br>
