@@ -25,7 +25,12 @@ class Form extends React.Component {
 
   componentDidMount() {
     // This line automatically assigns this.props.url to the const variable url
-    const { url } = this.props;
+    // const { url } = this.props;
+    const urlParams = new URLSearchParams(window.location.search);
+    const langid = urlParams.get("langid");
+    if (langid) {
+      this.setState({ botLanguage: `language${langid}` });
+    }
   }
 
   //handles selection to chat with a bot
@@ -143,12 +148,18 @@ class Form extends React.Component {
     // console.log("action item")
     // console.log(this.state.action)
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const langid = urlParams.get("langid");
+
     if (selection == "button0" || selection == "button3") {
       this.chatWithBot(selection);
     } else if (selection == "button1") {
-      this.editBot(selection);
+      //this.createBot(selection);
+      window.location.replace(`/create?langid=${langid}`);
     } else if (selection == "button2") {
-      this.createBot(selection);
+      // this.editBot(selection);
+      this.selectBotToEdit(selection);
+      this.setState({ botLanguage: `language${langid}` });
     } else if (selection == "button4") {
       this.createLanguage();
     }
