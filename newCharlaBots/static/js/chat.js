@@ -279,11 +279,19 @@ function chat_pickRandom(interpretedCode) {
   return interpretedCode.response[idx];
 }
 
+function cleanWords(str) {
+  return str
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean);        // drop empty strings
+}
+
 //interpretedCode = rules dict mapping what we should say
-function chat(interpretedCode, input) {
+function chat(interpretedCode, rawInput) {
   //depending on what interpretedCode.keyword is, we call different functions
-  input = input.toLowerCase();
-  input = input.split(" ");
+  input = cleanWords(rawInput);
+  // input = input.toLowerCase();
+  // input = input.split(" ");
   switch (interpretedCode.keyword.toLowerCase()) {
     case "ifany":
       return chat_ifAny(interpretedCode, input);
