@@ -29,22 +29,23 @@ def edit_bot():
     context = {}
     return flask.jsonify(**context), 200
 
-@newCharlaBots.app.route("/updateBot/", methods =["PATCH"])
+@newCharlaBots.app.route("/updateBot/", methods=["PATCH"])
 def update_bot():
     connection = get_db()
-    botid = flask.request.args.get("botID")
-    botname = flask.request.args.get("botName")
-    description = flask.request.args.get("description")
+    data = flask.request.get_json()
 
-    code = flask.request.args.get("canonicalCode")
+    botid = data.get("botID")
+    botname = data.get("botName")
+    description = data.get("description")
+    code = data.get("canonicalCode")
 
-    
+    connection.execute(
+        "UPDATE bots SET description=?, canonical=?, botname=? WHERE botid=?",
+        (description, code, botname, botid)
+    )
+    connection.commit()
 
-    data_botID = connection.execute("UPDATE bots SET description=?, canonical=?, botname=? WHERE botid=?",
-        (description, code, botname, botid))
-
-    context = {}
-    return flask.jsonify(**context), 200
+    return flask.jsonify(success=True), 200
 
 
 

@@ -1,368 +1,249 @@
-var isEditor = false;
+"use strict";
+/*
+ * Front‑end editor logic (patched 2025‑04‑27)
+ * – Removes implicit globals (j, comment)
+ * – Guards against undefined mappings (.trim())
+ * – Resets highlighting arrays each run
+ * – URL components are now encodeURIComponent‑escaped
+ */
+
+let isEditor = false;
 const newline = "(nw-ln)";
+
 $(document).ready(function () {
-  //get end of url to see what bot id we are looking for
+  // Determine whether we are in “Edit” mode.
   isEditor = document.getElementById("titleText").innerHTML.includes("Edit");
-  //run the rest of ready func only if editing
-  if (!isEditor) return;
+  if (!isEditor) return; // Nothing else to do in “Create” mode.
 
-  // gets botid
-  let botID = "";
-  if (document.getElementById("botid")) {
-    botID = document.getElementById("botid").innerHTML;
-  }
+  // Fetch bot + language data
+  const botID = document.getElementById("botid")?.innerHTML.trim() || "";
+  const langID = document.getElementById("langid").innerHTML.trim();
 
-  let langID = document.getElementById("langid").innerHTML;
+  const url = `/getBotAndLang/?botID=${encodeURIComponent(botID)}&langID=${encodeURIComponent(langID)}`;
 
-  let url =
-    "/getBotAndLang/?botID=" +
-    botID.toString().trim() +
-    "&langID=" +
-    langID.toString().trim();
-
-  fetch(url, {})
+  fetch(url)
     .then((response) => response.json())
     .then((data) => {
-      // loads titles that use bot names
-      document.getElementById("botname").value = data.botInfo["botname"];
-      document.getElementById("titleText").innerHTML =
-        "Edit " + data.botInfo["botname"];
-      document.getElementById("editCode").innerHTML =
-        "Edit " + data.botInfo["botname"] + "'s Code Below &#x2193;";
+      // Populate title, description, and code editor
+      const { botInfo, langInfo } = data;
+      $("#botname").val(botInfo.botname);
+      $("#titleText").text(`Edit ${botInfo.botname}`);
+      $("#editCode").html(`Edit ${botInfo.botname}'s Code Below &#x2193;`);
+      $("#description").val(botInfo.description);
 
-      // loads existing bot description
-      let description = data.botInfo["description"];
-      document.getElementById("description").value = description;
+      const translatedCode = translateCanonicalCode(langInfo, botInfo.canonical);
+      syntaxHighlighting(langInfo, translatedCode);
+      $("#editor").val(translatedCode);
 
-      // loads existing bot code
-      let canonical = data.botInfo["canonical"];
-      let mappings = data.langInfo;
-      let translatedCode = translateCanonicalCode(mappings, canonical);
-      syntaxHighlighting(mappings, translatedCode);
-      document.getElementById("editor").innerHTML = translatedCode;
-
-      updateScreen($("#editor").val());
+      updateScreen(translatedCode);
     });
 });
 
-//translates canonical to user code
+// ---------------------------- Translation ------------------------------ //
 function translateLineToUser(mapping, line) {
-  let translatedLine = "",
+  let translated = "",
     prevKeyword = "",
     keyword = "";
 
-  for (j = 0; j < line.length; j++) {
+  for (let j = 0; j < line.length; j++) {
     prevKeyword = keyword;
     keyword = "";
 
-    if (line[j] == "{") {
+    if (line[j] === "{") {
       j++;
-      for (; j < line.length; j++) {
-        if (line[j] != "}") {
-          keyword += line[j];
-        } else {
+      while (j < line.length && line[j] !== "}") {
+        keyword += line[j++];
+      }
+      const translatedKeyword = (mapping[keyword] ?? `{${keyword}}`).trim();
+      translated += keyword.startsWith("reply") ? `    ${translatedKeyword}` : translatedKeyword;
+    } else {
+      if (!prevKeyword.match(/^(if|reply|and)/)) translated += "    ";
+      while (j < line.length && line[j] !== "{") translated += line[j++];
+      j--; // compensate for final ++ of for‑loop
+    }
+  }
+  return translated;
+}
+
+function translateCanonicalCode(mapping, canonicalCode) {
+  return canonicalCode
+    .split(newline)
+    .map((ln) => translateLineToUser(mapping, ln))
+    .join("\n");
+}
+
+// ------------------------- Syntax highlighting ------------------------- //
+let conds = [],
+  replies = [],
+  picks = [];
+
+function syntaxHighlighting(mapping, translatedCode) {
+  // Reset highlight vectors each run
+  conds.length = replies.length = picks.length = 0;
+
+  const mappingKeys = [
+    "ifAny",
+    "andNotAny",
+    "ifAll",
+    "andNotAll",
+    "replyLine",
+    "startReply",
+    "endReply",
+    "endIf",
+    "pickRandom",
+    "endPick",
+  ];
+
+  translatedCode.split("\n").forEach((rawLn) => {
+    const line = rawLn.trim();
+    if (!line) return;
+
+    for (const key of mappingKeys) {
+      if (line.startsWith(mapping[key])) {
+        if (["ifAny", "endIf", "ifAll", "andNotAll"].includes(key)) conds.push(mapping[key]);
+        else if (["startReply", "endReply"].includes(key)) replies.push(mapping[key]);
+        else if (["pickRandom", "endPick"].includes(key)) picks.push(mapping[key]);
+      }
+    }
+  });
+}
+
+// ----------------------------- Save Bot -------------------------------- //
+function saveBot() {
+  const langID = $("#langid").text().trim();
+
+  fetch(`/getLanguageData/?langid=${encodeURIComponent(langID)}`)
+    .then((r) => r.json())
+    .then((mappings) => {
+      const translatedCode = $("#editor").val();
+      const canonicalCode = translatedCode
+        .split("\n")
+        .map((ln) => translateLineToCanonical(mappings, ln.trim()))
+        .filter(Boolean)
+        .join(newline)
+        .trim();
+
+      pushCanonicalToServer(canonicalCode);
+    });
+}
+
+function translateLineToCanonical(mapping, line) {
+  const mappingKeys = [
+    "ifAny",
+    "andNotAny",
+    "ifAll",
+    "andNotAll",
+    "replyLine",
+    "startReply",
+    "endReply",
+    "endIf",
+    "pickRandom",
+    "endPick",
+  ];
+
+  for (const key of mappingKeys) {
+    if (line.startsWith(mapping[key])) {
+      const rest = line.slice(mapping[key].length);
+      let canonical = `{${key}}${rest}`;
+
+      for (const notKey of ["andNotAny", "andNotAll"]) {
+        const idx = canonical.indexOf(mapping[notKey]);
+        if (idx !== -1) {
+          canonical = `${canonical.slice(0, idx)}{${notKey}}${canonical.slice(idx + mapping[notKey].length)}`;
           break;
         }
       }
-      let translatedKeyword = mapping[keyword].trim();
-
-      if (keyword.startsWith("reply")) {
-        translatedLine += "    " + translatedKeyword;
-      } else {
-        translatedLine += translatedKeyword;
-      }
-    }
-    //not a keyword
-    else {
-      if (
-        !(
-          prevKeyword.startsWith("if") ||
-          prevKeyword.startsWith("reply") ||
-          prevKeyword.startsWith("and")
-        )
-      ) {
-        translatedLine += "    ";
-      }
-      while (j < line.length && line[j] != "{") {
-        translatedLine += String(line[j]);
-        j++;
-      }
-      j--;
+      return canonical;
     }
   }
-  return translatedLine;
+  return line; // unchanged
 }
 
-//translates canonical code to user code
-function translateCanonicalCode(mapping, canonicalCode) {
-  let translatedCode = "";
-  let linesToTranslate = canonicalCode.split(newline);
-  for (let i = 0; i < linesToTranslate.length; i++) {
-    //loops thru each line of code
-    let translatedLine = translateLineToUser(mapping, linesToTranslate[i]);
-    translatedCode += translatedLine;
-    if (i < linesToTranslate.length - 1) {
-      translatedCode += "\n";
-    }
+function pushCanonicalToServer(canonicalCode) {
+  const botName = $("#botname").val().trim();
+  const description = $("#description").val();
+  const botIDNode = document.getElementById("botid");
+  const botID = botIDNode ? botIDNode.innerHTML.trim() : "-1";
+
+  if (!botName) {
+    alert("Name can't be empty");
+    return;
   }
-  return translatedCode;
-}
 
-// create more vectors here for more color categories for syntax  highlighting https://stackoverflow.com/questions/37139076/change-color-of-specific-words-in-textarea */
-var conds = []; //ifAny, andNotAny, ifAll, andNotAll
-var replies = []; //startReply, endReply
-var picks = []; // pickRandom, endPick
-
-// applies syntax highlighting to code editting area
-function syntaxHighlighting(mapping, translatedCode) {
-  let linesToTranslate = translatedCode.split("\n");
-
-  let mappingKeys = [
-    "ifAny",
-    "andNotAny",
-    "ifAll",
-    "andNotAll",
-    "replyLine",
-    "startReply",
-    "endReply",
-    "endIf",
-    "pickRandom",
-    "endPick",
-  ];
-
-  for (let j = 0; j < linesToTranslate.length; j++) {
-    let line = linesToTranslate[j].trim();
-    if (line == "") continue;
-
-    for (let i = 0; i < mappingKeys.length; i++) {
-      if (line.startsWith(mapping[mappingKeys[i]])) {
-        if (
-          mappingKeys[i] == "ifAny" ||
-          mappingKeys[i] == "endIf" ||
-          mappingKeys[i] == "ifAll" ||
-          mappingKeys[i] == "andNotAll"
-        ) {
-          conds.push(mapping[mappingKeys[i]]);
-        } else if (
-          mappingKeys[i] == "startReply" ||
-          mappingKeys[i] == "endReply"
-        ) {
-          replies.push(mapping[mappingKeys[i]]);
-        } else if (
-          mappingKeys[i] == "pickRandom" ||
-          mappingKeys[i] == "endPick"
-        ) {
-          picks.push(mapping[mappingKeys[i]]);
-        }
-      }
-    }
-  }
-}
-
-//TODO: alert error if trying to save a bot with error
-//what constitutes as an error?
-//just alert or tell them the error
-function saveBot() {
-  let langID = document.getElementById("langid").innerHTML;
-
-  let url = "/getLanguageData/?langid=" + langID.trim();
-  fetch(url, {})
-    .then((response) => response.json())
+  fetch("/getAllBotNames")
+    .then((r) => r.json())
     .then((data) => {
-      let canonicalCode = "";
-      let translatedCode = document.getElementById("editor").value;
-
-      let translatedLines = translatedCode.split("\n");
-      let mappings = data;
-
-      for (let i = 0; i < translatedLines.length; i++) {
-        let line = translatedLines[i].trim();
-        if (line == "") continue;
-        line = translateLineToCanonical(mappings, line);
-        canonicalCode += line;
-        if (i != translatedLines.length - 1) {
-          canonicalCode += newline;
-        }
+      const nameTaken = data.data.some((x) => x.name === botName && String(x.key) !== String(botID));
+      if (nameTaken) {
+        alert("That name is already taken, please choose another one");
+        return;
       }
-      canonicalCode.trim();
-      //send the updated code back to database
-      updateCanonicalCode(canonicalCode);
-    });
-}
 
-//translate a line from user language to canonical code
-function translateLineToCanonical(mapping, line) {
-  let mappingKeys = [
-    "ifAny",
-    "andNotAny",
-    "ifAll",
-    "andNotAll",
-    "replyLine",
-    "startReply",
-    "endReply",
-    "endIf",
-    "pickRandom",
-    "endPick",
-  ];
-  let notKeys = ["andNotAny", "andNotAll"];
-  //check if line starts with any of the keywords
-  let canonical_str = "";
-  for (let i = 0; i < mappingKeys.length; i++) {
-    if (line.startsWith(mapping[mappingKeys[i]])) {
-      let lastWords = line.slice(mapping[mappingKeys[i]].length);
-      canonical_str = "{" + mappingKeys[i] + "}" + lastWords;
-      break;
-    }
-  }
+      const payload = {
+        botID,
+        botName,
+        canonicalCode,
+        description,
+      };
 
-  for (let i = 0; i < notKeys.length; i++) {
-    let index = canonical_str.indexOf(mapping[notKeys[i]]);
-    if (index != -1) {
-      let before = canonical_str.slice(0, index);
-      let key = notKeys[i];
-      let after = canonical_str.slice(index + mapping[notKeys[i]].length);
-      canonical_str = before + "{" + key + "}" + after;
-      break;
-    }
-  }
-  if (canonical_str == "") {
-    return line;
-  }
-  return canonical_str;
-}
+      const endpoint = isEditor ? "/updateBot/" : "/createBot/";
 
-//sends updated code, description and values back to db
-function updateCanonicalCode(canonicalCode) {
-  //check the botname field
-  //if the botname already exists on a different botID, then tell them that the name is taken
-
-  let botName = document.getElementById("botname").value.toString().trim();
-  let description = document.getElementById("description").value;
-  let botID = document.getElementById("botid");
-  if (!botID) {
-    botID = -1;
-  } else {
-    botID = botID.innerHTML;
-  }
-
-  let url = "/getAllBotNames";
-  fetch(url, {})
-    .then((response) => response.json())
-    .then((data) => {
-      // can't make bot name empty
-      if (botName.length == 0) {
-        alert("Name can't be empty");
-      } else {
-        //checks for duplicate name
-        let isNameMatch = false;
-        for (let i = 0; i < data.data.length; i++) {
-          if (botName == data.data[i].name && botID != data.data[i].key) {
-            alert("That name is already taken, please choose another one");
-            isNameMatch = true;
-            break;
-          }
-        }
-
-        // does not allow you to edit a bot name to match another one
-        if (!isNameMatch) {
-          if (isEditor) {
-            let botID = document
-              .getElementById("botid")
-              .innerHTML.toString()
-              .trim();
-            let url =
-              "/updateBot/?botID=" +
-              botID +
-              "&botName=" +
-              botName +
-              "&canonicalCode=" +
-              canonicalCode +
-              "&description=" +
-              description;
-            fetch(url, { method: "PATCH" });
-          } else {
-            console.log("adding canonical code: ", canonicalCode);
-            let url =
-              "/createBot/?botName=" +
-              botName +
-              "&canonicalCode=" +
-              canonicalCode +
-              "&description=" +
-              description;
-            fetch(url, { method: "POST" });
-          }
+      fetch(endpoint, {
+        method: isEditor ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error("Failed to save");
+          return r.json();
+        })
+        .then(() => {
           alert("Update Code Success!");
-        }
-      }
+        })
+        .catch((err) => {
+          console.error(err);
+          alert("Failed to update bot");
+        });
     });
 }
 
-// code edit area functionality
+// --------------------------- Editor widget ----------------------------- //
 updateScreen($("#editor").val());
-$("#editor").on("keydown", function (e) {
-  setTimeout(() => {
-    updateScreen($(this).val());
-  }, 0);
+$("#editor").on("keydown", function () {
+  setTimeout(() => updateScreen($(this).val()), 0);
 });
+
 function updateScreen(text) {
-  $("#out").html(
-    colorize(
-      text.replace(/\n/g, "<br>").replace(/\t/g, "&#9;"),
-      text.split(/\r?\n/)
-    )
-  );
+  $("#out").html(colorize(text.replace(/\n/g, "<br>").replace(/\t/g, "&#9;"), text.split(/\r?\n/)));
 }
+
 $("#editor").on("scroll", function () {
-  // set out to be the same as in
   $("#out").css({ top: -$(this).scrollTop() + "px" });
 });
 
-// colors words for syntax highlighting
+// ------------------------------ Colouring ------------------------------ //
 function colorize(text, lines) {
-  // colors comments green
+  // highlight comments
   for (const line of lines) {
-    if (line.includes("//")) {
-      comment = line.split("//")[1];
-      console.log(comment);
-      text = text.replace(
-        "//" + comment,
-        `<span style="color:LightGreen">//${comment}</span>`
-      );
+    const idx = line.indexOf("//");
+    if (idx !== -1) {
+      const commentText = line.slice(idx + 2);
+      text = text.replace(`//${commentText}`, `<span style="color:LightGreen">//${commentText}</span>`);
     }
   }
 
-  // colors conditionals CornflowerBlue
-  for (const cond of conds) {
-    text = text.replaceAll(
-      cond,
-      `<span style="color:CornflowerBlue">${cond}</span>`
-    );
-    text = text.replaceAll(
-      cond.toLowerCase(),
-      `<span style="color:CornflowerBlue">${cond.toLowerCase()}</span>`
-    );
-  }
+  const applyColour = (arr, colour) => {
+    for (const tok of arr) {
+      text = text.replaceAll(tok, `<span style=\"color:${colour}\">${tok}</span>`);
+      text = text.replaceAll(tok.toLowerCase(), `<span style=\"color:${colour}\">${tok.toLowerCase()}</span>`);
+    }
+  };
 
-  // colors reply words DarkOrchid
-  for (const reply of replies) {
-    text = text.replaceAll(
-      reply,
-      `<span style="color:DarkOrchid">${reply}</span>`
-    );
-    text = text.replaceAll(
-      reply.toLowerCase(),
-      `<span style="color:DarkOrchid">${reply.toLowerCase()}</span>`
-    );
-  }
-
-  // colors pick words Orchid
-  for (const pick of picks) {
-    text = text.replaceAll(pick, `<span style="color:Orchid">${pick}</span>`);
-    text = text.replaceAll(
-      pick.toLowerCase(),
-      `<span style="color:Orchid">${pick.toLowerCase()}</span>`
-    );
-  }
+  applyColour(conds, "CornflowerBlue");
+  applyColour(replies, "DarkOrchid");
+  applyColour(picks, "Orchid");
 
   return text;
 }

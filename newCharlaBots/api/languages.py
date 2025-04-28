@@ -45,14 +45,18 @@ def edit_language():
 #mappings from canonical to user lang
 @newCharlaBots.app.route("/getLanguageData/")
 def get_language_data():
-
     connection = get_db()
     langID = flask.request.args.get("langid")
-    data = connection.execute("SELECT * FROM languages WHERE languageid=?", (langID)).fetchone()
-    context = data
+    data = connection.execute(
+        "SELECT * FROM languages WHERE languageid=?", 
+        (langID,)
+    ).fetchone()
 
+    if data is None:
+        return flask.jsonify(error="Language not found"), 404
+
+    context = dict(data)  # <-- Convert Row to dict
     return flask.jsonify(**context), 200
-
 
 
 @newCharlaBots.app.route("/deleteLanguage/")

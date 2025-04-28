@@ -154,7 +154,7 @@ function createCanonicalArray(blocks) {
     //for every word remove capitalization and grammar
     for (let i = 0; i < words.length; i++) {
       //words[i] = words[i].toLowerCase(); //TODO: should not tolowercase responses, just input words
-      words[i] = words[i].replace(/[.,\/#!$%\^&\*;:=\_`~]/g, "");
+      words[i] = words[i].replace(/[.,\/#!$%\^&\*;:=\_~]/g, "");
     }
 
     let keyword = checkForKeyword(words[0]);
