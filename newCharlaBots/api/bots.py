@@ -8,10 +8,11 @@ import newCharlaBots
 def create_bot():
 
     connection = get_db()
+    data = flask.request.get_json()
 
-    botname = request.args.get("botName")
-    description = request.args.get("description")
-    cannonicalCode = request.args.get("canonicalCode")
+    botname = data.get("botName")
+    description = data.get("description")
+    cannonicalCode = data.get("canonicalCode")
 
     connection.execute("INSERT INTO bots (botname, description, canonical) VALUES (?,?, ?)", 
     	(botname, description, cannonicalCode))
